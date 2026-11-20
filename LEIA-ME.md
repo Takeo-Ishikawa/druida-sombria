@@ -1,27 +1,33 @@
-# Druida da Floresta Sombria — Godot 4.7 / 4.7.2
+# Druida Sombria — caminhada e gesto ritual (Godot 4.7)
 
-## Para abrir no Windows
-1. Extraia o arquivo ZIP por completo.
-2. Abra o **Godot 4.7 ou 4.7.2** e clique em **Importar**.
-3. Selecione o arquivo `project.godot` nesta pasta.
-4. Abra a cena `main.tscn` ou execute o projeto com **F5**.
+Protótipo de **animação quadro a quadro**, não animação esquelética, criado usando a pose neutra aprovada como referência de direção artística. As novas animações são estudos de poses pintadas; como foram geradas separadamente, há diferenças sutis em proporção e câmera em relação à pose neutra.
 
-### Controles
-- **1**: repouso, com respiração sutil.
-- **2**: marcha estacionária, com oscilação dos braços e pernas.
-- **3** ou **Espaço**: gesto ritual com cajado.
-- Também existem botões na interface.
+## Abrir / testar
 
-### O que foi incluído
-- Recortes **transparentes** da prancha de pintura, exportados como **21 arquivos PNG separados** (`assets/parts`).
-- Hierarquia nativa Godot com `Skeleton2D` e **15 nós `Bone2D`**, preparada por script (`scripts/main.gd`).
-- Hierarquia de peças, posições, tamanhos e ordem de desenho em `scripts/parts.gd`.
-- A ficha de conceito original, a prancha de peças e a prévia da montagem em `reference/`.
+Importe `project.godot` na Godot 4.7 e pressione F5.
 
-### Limitações importantes
-As peças saíram de uma **prancha gerada por IA**, não de um conjunto desenhado originalmente para deformação esquelética. Há pequenas lacunas, discrepâncias de perspectiva e junções de braço/perna que ainda precisam de repintura e sobreposição. Por isso, as animações **são propositalmente moderadas**. O rig não usa ainda malha deformável (`Polygon2D` + pesos), IK ou animações quadros-a-quadro; a marcha não desloca a personagem pelo cenário. O cajado acompanha o osso da mão direita aproximadamente. Esta é a primeira integração jogável/visual de avaliação — não um sprite final pronto para publicação.
+- `1`: pose neutra aprovada;
+- `2`: ciclo contínuo de **8 quadros** de caminhada, no lugar;
+- `3` ou `Espaço`: **8 quadros** do gesto ritual, voltando ao estado anterior.
 
-O projeto é independente e **não altera seus outros repositórios**. Não requer Spine, plugins ou extensões.
+Os arquivos individuais estão em `assets/frames/walk/00.png` a `07.png` e `assets/frames/ritual/00.png` a `07.png`. A pose neutra está em `assets/pose/druida_pose_neutra.png`.
 
-### Validação
-A montagem de referência foi gerada e todos os arquivos de projeto foram empacotados. **A execução no binário do Godot não foi testada neste ambiente**; abra no editor para validar importação e possíveis avisos.
+## Publicar via GitHub Pages
+
+Copie o conteúdo deste pacote para a **raiz** do repositório `druida-sombria`, mantendo `.github/workflows/publicar-web.yml` e `export_presets.cfg` já existentes no GitHub. Em seguida:
+
+```powershell
+git pull --rebase origin main
+git add .
+git commit -m "Adicionar caminhada e gesto ritual pintados"
+git push origin main
+```
+
+A exportação Web deve ser feita pelo workflow existente. Se a compilação falhar, consulte a aba Actions e envie o log para diagnóstico.
+
+## Limitações
+
+- Recortes automatizados de uma prancha ilustrada podem exibir pequenos halos ou artefatos em bordas e alguns quadros (sobretudo perto do cajado).
+- A caminhada é estacionária e vista lateral, enquanto a pose neutra é em três quartos; a transição muda o ângulo da câmera.
+- O gesto é uma sequência curta e não possui VFX de magia nesta versão.
+- Para animação com ossos de qualidade comercial, será necessário redesenhar as partes corretamente sobrepostas e criar pesos de deformação. Estes quadros não são peças separadas.

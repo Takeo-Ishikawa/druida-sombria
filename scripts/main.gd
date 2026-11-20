@@ -1,210 +1,162 @@
 extends Node2D
-## Godot 4.7: articulated character from transparent painted PNG pieces.
-## Skeleton2D / Bone2D provides real transform hierarchy; no mesh skinning yet.
+## Protótipo Web Godot 4.7: quadros pintados com animação de caminhada e gesto.
+## Preserva pose neutra independente; frames em assets/frames/walk e ritual.
 
-const PIECES := preload("res://scripts/parts.gd")
-const CHARACTER_SCALE := 0.95
-var skeleton: Skeleton2D
-var bones: Dictionary = {}
-var bone_pivots: Dictionary = {}
-var state: String = "idle"
-var attack_progress: float = -1.0
-var clock: float = 0.0
-var state_label: Label
-var character: Node2D
-var neutral_pose: Sprite2D
+const WINDOW := Vector2(1100.0, 720.0)
+const FRAME_COUNT := 8
+const POSE_PATH := "res://assets/pose/druida_pose_neutra.png"
+const WALK_PATH := "res://assets/frames/walk/%02d.png"
+const RITUAL_PATH := "res://assets/frames/ritual/%02d.png"
+
+var neutral: Sprite2D
+var animated: AnimatedSprite2D
+var status: Label
+var action := "idle"
+var previous := "idle"
+var clock := 0.0
+var gesture_remaining := 0.0
+var frames_available := false
 
 func _ready() -> void:
-    _build_background()
-    _build_character()
-    _build_neutral_pose()
-    _build_controls()
+    _stage()
+    _pose()
+    _animations()
+    _controls()
+    _set_mode("idle")
 
-func _build_background() -> void:
-    var bg := ColorRect.new()
-    bg.color = Color("1b211e")
-    bg.size = Vector2(1100, 720)
-    bg.z_index = -100
-    add_child(bg)
+func _stage() -> void:
+    var backdrop := ColorRect.new()
+    backdrop.color = Color("1d2622")
+    backdrop.size = WINDOW
+    backdrop.z_index = -20
+    add_child(backdrop)
     var ground := ColorRect.new()
-    ground.color = Color("30352c")
-    ground.position = Vector2(0, 637)
-    ground.size = Vector2(1100, 83)
-    ground.z_index = -99
+    ground.position = Vector2(0, 633)
+    ground.size = Vector2(1100, 87)
+    ground.color = Color("30382e")
+    ground.z_index = -10
     add_child(ground)
-    var panel := ColorRect.new()
-    panel.color = Color("26312b")
-    panel.position = Vector2(740, 0)
-    panel.size = Vector2(360, 720)
-    panel.z_index = -98
-    add_child(panel)
+    var side := ColorRect.new()
+    side.position = Vector2(740, 0)
+    side.size = Vector2(360, 720)
+    side.color = Color("27332d")
+    side.z_index = -9
+    add_child(side)
 
-func _make_bone(name: String, parent_name: String, pivot: Vector2) -> Bone2D:
-    var parent: Node2D = skeleton if parent_name.is_empty() else bones[parent_name]
-    var parent_pivot: Vector2 = Vector2.ZERO if parent_name.is_empty() else bone_pivots[parent_name]
-    var bone := Bone2D.new()
-    bone.name = name
-    bone.position = pivot - parent_pivot
-    parent.add_child(bone)
-    bones[name] = bone
-    bone_pivots[name] = pivot
-    return bone
-
-func _add_piece(name: String, bone_name: String, z: int, top_left: Vector2, dim: Vector2) -> void:
-    var sprite := Sprite2D.new()
-    sprite.name = name
-    sprite.centered = false
-    sprite.texture = load("res://assets/parts/%s.png" % name)
-    sprite.position = top_left - bone_pivots[bone_name]
-    sprite.scale = dim / sprite.texture.get_size()
-    sprite.z_as_relative = false
-    sprite.z_index = z
-    bones[bone_name].add_child(sprite)
-
-func _build_character() -> void:
-    character = Node2D.new()
-    character.name = "Druida_Visual"
-    character.position = Vector2(50, 12)
-    character.scale = Vector2.ONE * CHARACTER_SCALE
-    add_child(character)
-    skeleton = Skeleton2D.new()
-    skeleton.name = "Esqueleto2D"
-    character.add_child(skeleton)
-    _make_bone("quadril", "", Vector2(270, 352))
-    _make_bone("tronco", "quadril", Vector2(270, 258))
-    _make_bone("pescoco", "tronco", Vector2(269, 207))
-    _make_bone("cabeca", "pescoco", Vector2(270, 149))
-    _make_bone("ombro_esq", "tronco", Vector2(201, 253))
-    _make_bone("cotovelo_esq", "ombro_esq", Vector2(181, 353))
-    _make_bone("ombro_dir", "tronco", Vector2(338, 253))
-    _make_bone("cotovelo_dir", "ombro_dir", Vector2(358, 355))
-    _make_bone("mao_dir", "cotovelo_dir", Vector2(380, 431))
-    _make_bone("coxa_esq", "quadril", Vector2(237, 368))
-    _make_bone("joelho_esq", "coxa_esq", Vector2(247, 460))
-    _make_bone("pe_esq", "joelho_esq", Vector2(247, 563))
-    _make_bone("coxa_dir", "quadril", Vector2(305, 368))
-    _make_bone("joelho_dir", "coxa_dir", Vector2(310, 460))
-    _make_bone("pe_dir", "joelho_dir", Vector2(310, 563))
-    var mapping: Dictionary = {
-        "capa_tras":"tronco", "cabelo_tras":"cabeca",
-        "canela_esq":"joelho_esq", "pe_esq":"pe_esq", "canela_dir":"joelho_dir", "pe_dir":"pe_dir",
-        "coxa_esq":"coxa_esq", "coxa_dir":"coxa_dir", "saia_tras":"quadril", "saia":"quadril",
-        "pescoco":"pescoco", "torax":"tronco", "braco_esq":"ombro_esq", "antebraco_esq":"cotovelo_esq",
-        "braco_dir":"ombro_dir", "antebraco_dir":"cotovelo_dir", "cabeca":"cabeca",
-        "capa_lateral":"tronco", "bolsa":"quadril", "ornamento":"tronco", "cajado":"mao_dir"
-    }
-    for item in PIECES.LAYOUT:
-        var name: String = item[0]
-        _add_piece(name, mapping[name], item[3], Vector2(item[1], item[2]), Vector2(item[4], item[5]))
-
-func _build_neutral_pose() -> void:
-    # Approved corrected pose, displayed as a single image until re-rigging is complete.
-    neutral_pose = Sprite2D.new()
-    neutral_pose.name = "PoseNeutraCorrigida"
-    neutral_pose.centered = false
-    neutral_pose.position = Vector2(155, 42)
-    neutral_pose.z_index = 1
-    if ResourceLoader.exists("res://assets/pose/druida_pose_neutra.png"):
-        neutral_pose.texture = load("res://assets/pose/druida_pose_neutra.png")
-        neutral_pose.scale = Vector2.ONE * 0.47
+func _pose() -> void:
+    neutral = Sprite2D.new()
+    neutral.name = "PoseNeutra"
+    neutral.centered = false
+    neutral.position = Vector2(155, 42)
+    neutral.scale = Vector2.ONE * 0.47
+    if ResourceLoader.exists(POSE_PATH):
+        neutral.texture = load(POSE_PATH)
     else:
-        # Fallback to the original concept sheet until the corrected PNG is uploaded.
-        var atlas := AtlasTexture.new()
-        atlas.atlas = load("res://reference/ficha_original.png")
-        atlas.region = Rect2(1035, 61, 414, 367)
-        neutral_pose.texture = atlas
-        neutral_pose.scale = Vector2(1.10, 1.55)
-        neutral_pose.position = Vector2(135, 91)
-    add_child(neutral_pose)
-    _set_pose_visibility()
+        # O repositório ainda pode não ter recebido o PNG da pose corrigida.
+        var old := AtlasTexture.new()
+        old.atlas = load("res://reference/ficha_original.png")
+        old.region = Rect2(1035, 61, 414, 367)
+        neutral.texture = old
+        neutral.scale = Vector2(1.10, 1.55)
+        neutral.position = Vector2(135, 91)
+    add_child(neutral)
 
-func _set_pose_visibility() -> void:
-    if neutral_pose == null:
-        return
-    var is_neutral := state == "idle" and attack_progress < 0.0
-    neutral_pose.visible = is_neutral
-    character.visible = not is_neutral
+func _animations() -> void:
+    animated = AnimatedSprite2D.new()
+    animated.name = "AnimacoesPintadas"
+    animated.centered = false
+    animated.position = Vector2(155, 30)
+    animated.scale = Vector2(1.65, 1.56)
+    var library := SpriteFrames.new()
+    library.add_animation("walk")
+    library.set_animation_speed("walk", 9.0)
+    library.set_animation_loop("walk", true)
+    library.add_animation("ritual")
+    library.set_animation_speed("ritual", 8.0)
+    library.set_animation_loop("ritual", false)
+    frames_available = true
+    for i in range(FRAME_COUNT):
+        var walk_file := WALK_PATH % i
+        var ritual_file := RITUAL_PATH % i
+        if not ResourceLoader.exists(walk_file) or not ResourceLoader.exists(ritual_file):
+            frames_available = false
+            break
+        library.add_frame("walk", load(walk_file))
+        library.add_frame("ritual", load(ritual_file))
+    animated.sprite_frames = library
+    animated.animation_finished.connect(_on_animation_finished)
+    add_child(animated)
 
-func _build_controls() -> void:
-    var heading := Label.new()
-    heading.text = "DRUIDA SOMBRIA"
-    heading.position = Vector2(763, 45)
-    heading.add_theme_font_size_override("font_size", 28)
-    add_child(heading)
+func _controls() -> void:
+    var title := Label.new()
+    title.text = "DRUIDA SOMBRIA"
+    title.position = Vector2(766, 42)
+    title.add_theme_font_size_override("font_size", 27)
+    add_child(title)
     var subtitle := Label.new()
-    subtitle.text = "Estudo de rig 2D • Godot 4.7"
-    subtitle.position = Vector2(763, 83)
+    subtitle.text = "Godot 4.7 · Estudo de animações pintadas"
+    subtitle.position = Vector2(765, 85)
     add_child(subtitle)
-    var description := Label.new()
-    description.text = "Pose neutra corrigida (imagem única).\nO rig antigo segue disponível somente\npara testes de articulação."
-    description.position = Vector2(763, 125)
-    add_child(description)
-    var buttons: Array = [
-        ["1  •  Pose neutra", "idle"], ["2  •  Caminhada", "walk"], ["3  •  Gesto ritual", "ritual"]
-    ]
-    for i in range(buttons.size()):
-        var button := Button.new()
-        button.text = buttons[i][0]
-        button.position = Vector2(760, 243 + i * 68)
-        button.size = Vector2(300, 51)
-        button.pressed.connect(_on_mode.bind(buttons[i][1]))
-        add_child(button)
-    state_label = Label.new()
-    state_label.text = "Pose neutra corrigida"
-    state_label.position = Vector2(764, 484)
-    state_label.add_theme_font_size_override("font_size", 17)
-    add_child(state_label)
+    var desc := Label.new()
+    desc.text = "Pose neutra, caminhada cíclica e\ngesto ritual de oito quadros.\nTeclas 1, 2, 3 ou Espaço."
+    desc.position = Vector2(765, 132)
+    add_child(desc)
+    var options := [["1 · Pose neutra", "idle"], ["2 · Caminhar", "walk"], ["3 · Gesto ritual", "ritual"]]
+    for i in range(options.size()):
+        var btn := Button.new()
+        btn.text = options[i][0]
+        btn.position = Vector2(762, 250 + i * 66)
+        btn.size = Vector2(305, 50)
+        btn.pressed.connect(_set_mode.bind(options[i][1]))
+        add_child(btn)
+    status = Label.new()
+    status.position = Vector2(765, 491)
+    status.add_theme_font_size_override("font_size", 17)
+    add_child(status)
     var note := Label.new()
-    note.text = "A pose neutra é estática.\nAs animações do rig antigo ainda\nprecisam de correções nas junções."
-    note.position = Vector2(763, 561)
+    note.position = Vector2(765, 548)
+    note.text = "Estudo 2D quadro a quadro.\nA pose neutra usa arte independente.\nAinda não é rig por ossos."
     add_child(note)
 
-func _on_mode(mode: String) -> void:
+func _set_mode(mode: String) -> void:
     if mode == "ritual":
-        attack_progress = 0.0
-        state_label.text = "Animação: gesto ritual"
+        if not frames_available:
+            status.text = "Envie os 16 PNGs para habilitar as animações"
+            return
+        previous = action if action != "ritual" else previous
+        action = "ritual"
+        neutral.visible = false
+        animated.visible = true
+        animated.play("ritual")
+        status.text = "Gesto ritual"
+        return
+    action = mode
+    if mode == "walk" and frames_available:
+        neutral.visible = false
+        animated.visible = true
+        animated.play("walk")
+        status.text = "Caminhada · 9 quadros/s"
     else:
-        state = mode
-        state_label.text = "Rig antigo: caminhada (teste)" if mode == "walk" else "Pose neutra corrigida"
-    _set_pose_visibility()
+        animated.stop()
+        animated.visible = false
+        neutral.visible = true
+        status.text = "Pose neutra" if mode == "idle" else "Faltam sprites: assets/frames/"
+
+func _on_animation_finished() -> void:
+    if animated.animation == "ritual":
+        _set_mode(previous)
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_1:
-            _on_mode("idle")
+            _set_mode("idle")
         elif event.keycode == KEY_2:
-            _on_mode("walk")
+            _set_mode("walk")
         elif event.keycode == KEY_3 or event.keycode == KEY_SPACE:
-            _on_mode("ritual")
+            _set_mode("ritual")
 
 func _process(delta: float) -> void:
     clock += delta
-    for b in bones.values():
-        b.rotation = 0.0
-    var breath := sin(clock * 1.8)
-    var walk := state == "walk"
-    var s := sin(clock * 5.7)
-    bones["tronco"].rotation = 0.009 * breath
-    bones["cabeca"].rotation = -0.014 * breath
-    bones["ombro_esq"].rotation = 0.013 * breath + (0.09 * s if walk else 0.0)
-    bones["ombro_dir"].rotation = -0.011 * breath + (-0.07 * s if walk else 0.0)
-    bones["cotovelo_esq"].rotation = -0.02 * breath
-    bones["cotovelo_dir"].rotation = 0.025 * breath
-    bones["coxa_esq"].rotation = 0.12 * s if walk else 0.0
-    bones["coxa_dir"].rotation = -0.12 * s if walk else 0.0
-    bones["joelho_esq"].rotation = 0.08 * maxf(0.0, -s) if walk else 0.0
-    bones["joelho_dir"].rotation = 0.08 * maxf(0.0, s) if walk else 0.0
-    bones["pe_esq"].rotation = -0.07 * s if walk else 0.0
-    bones["pe_dir"].rotation = 0.07 * s if walk else 0.0
-    character.position.y = 12.0 + (3.0 * sin(clock * 11.4) if walk else 1.3 * breath)
-    if attack_progress >= 0.0:
-        attack_progress += delta / 0.9
-        var wave := sin(minf(attack_progress, 1.0) * PI)
-        bones["ombro_dir"].rotation = -0.33 * wave
-        bones["cotovelo_dir"].rotation = -0.19 * wave
-        bones["mao_dir"].rotation = 0.14 * wave
-        bones["tronco"].rotation = -0.025 * wave
-        if attack_progress >= 1.0:
-            attack_progress = -1.0
-            state_label.text = "Rig antigo: caminhada (teste)" if walk else "Pose neutra corrigida"
-    _set_pose_visibility()
+    if action == "idle":
+        # Movimento mínimo: evita a rigidez sem deformar a ilustração inteira.
+        neutral.position.y = 42.0 + sin(clock * 1.7) * 1.1
