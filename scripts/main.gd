@@ -12,10 +12,12 @@ var attack_progress: float = -1.0
 var clock: float = 0.0
 var state_label: Label
 var character: Node2D
+var neutral_pose: Sprite2D
 
 func _ready() -> void:
     _build_background()
     _build_character()
+    _build_neutral_pose()
     _build_controls()
 
 func _build_background() -> void:
@@ -95,6 +97,34 @@ func _build_character() -> void:
         var name: String = item[0]
         _add_piece(name, mapping[name], item[3], Vector2(item[1], item[2]), Vector2(item[4], item[5]))
 
+func _build_neutral_pose() -> void:
+    # Approved corrected pose, displayed as a single image until re-rigging is complete.
+    neutral_pose = Sprite2D.new()
+    neutral_pose.name = "PoseNeutraCorrigida"
+    neutral_pose.centered = false
+    neutral_pose.position = Vector2(155, 42)
+    neutral_pose.z_index = 1
+    if ResourceLoader.exists("res://assets/pose/druida_pose_neutra.png"):
+        neutral_pose.texture = load("res://assets/pose/druida_pose_neutra.png")
+        neutral_pose.scale = Vector2.ONE * 0.47
+    else:
+        # Fallback to the original concept sheet until the corrected PNG is uploaded.
+        var atlas := AtlasTexture.new()
+        atlas.atlas = load("res://reference/ficha_original.png")
+        atlas.region = Rect2(1035, 61, 414, 367)
+        neutral_pose.texture = atlas
+        neutral_pose.scale = Vector2(1.10, 1.55)
+        neutral_pose.position = Vector2(135, 91)
+    add_child(neutral_pose)
+    _set_pose_visibility()
+
+func _set_pose_visibility() -> void:
+    if neutral_pose == null:
+        return
+    var is_neutral := state == "idle" and attack_progress < 0.0
+    neutral_pose.visible = is_neutral
+    character.visible = not is_neutral
+
 func _build_controls() -> void:
     var heading := Label.new()
     heading.text = "DRUIDA SOMBRIA"
@@ -106,11 +136,11 @@ func _build_controls() -> void:
     subtitle.position = Vector2(763, 83)
     add_child(subtitle)
     var description := Label.new()
-    description.text = "Arte pintada separada em camadas.\nSkeleton2D + Bone2D com animação\nprocedural experimental."
+    description.text = "Pose neutra corrigida (imagem única).\nO rig antigo segue disponível somente\npara testes de articulação."
     description.position = Vector2(763, 125)
     add_child(description)
     var buttons: Array = [
-        ["1  •  Repouso", "idle"], ["2  •  Caminhada", "walk"], ["3  •  Gesto ritual", "ritual"]
+        ["1  •  Pose neutra", "idle"], ["2  •  Caminhada", "walk"], ["3  •  Gesto ritual", "ritual"]
     ]
     for i in range(buttons.size()):
         var button := Button.new()
@@ -120,12 +150,12 @@ func _build_controls() -> void:
         button.pressed.connect(_on_mode.bind(buttons[i][1]))
         add_child(button)
     state_label = Label.new()
-    state_label.text = "Animação: repouso"
+    state_label.text = "Pose neutra corrigida"
     state_label.position = Vector2(764, 484)
     state_label.add_theme_font_size_override("font_size", 17)
     add_child(state_label)
     var note := Label.new()
-    note.text = "Versão de teste. Alguns encaixes\nainda exigem retoque artístico.\nA caminhada é realizada no lugar."
+    note.text = "A pose neutra é estática.\nAs animações do rig antigo ainda\nprecisam de correções nas junções."
     note.position = Vector2(763, 561)
     add_child(note)
 
@@ -135,7 +165,8 @@ func _on_mode(mode: String) -> void:
         state_label.text = "Animação: gesto ritual"
     else:
         state = mode
-        state_label.text = "Animação: caminhada" if mode == "walk" else "Animação: repouso"
+        state_label.text = "Rig antigo: caminhada (teste)" if mode == "walk" else "Pose neutra corrigida"
+    _set_pose_visibility()
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
@@ -175,4 +206,5 @@ func _process(delta: float) -> void:
         bones["tronco"].rotation = -0.025 * wave
         if attack_progress >= 1.0:
             attack_progress = -1.0
-            state_label.text = "Animação: caminhada" if walk else "Animação: repouso"
+            state_label.text = "Rig antigo: caminhada (teste)" if walk else "Pose neutra corrigida"
+    _set_pose_visibility()
